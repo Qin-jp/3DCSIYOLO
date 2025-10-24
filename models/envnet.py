@@ -30,9 +30,9 @@ class EnvNet3D(nn.Module):
         self.downcatconv2 = DownCatConv3d(hidden_width*2, hidden_width*4, 3, 1, padding_mode, factorization=factorization)
 
         # Head
-        self.head1 = HeadConv3d(hidden_width, 3, 3, 1, padding_mode, factorization=factorization)
-        self.head2 = HeadConv3d(hidden_width*2, 3, 3, 1, padding_mode, factorization=factorization)
-        self.head3 = HeadConv3d(hidden_width*4, 3, 3, 1, padding_mode, factorization=factorization)
+        self.head1 = HeadConv3d(hidden_width, 4, 3, 1, padding_mode, factorization=factorization)
+        self.head2 = HeadConv3d(hidden_width*2, 4, 3, 1, padding_mode, factorization=factorization)
+        self.head3 = HeadConv3d(hidden_width*4, 4, 3, 1, padding_mode, factorization=factorization)
 
     def forward(self, x):
         # x: (B, C, D, H, W)
@@ -55,8 +55,14 @@ class EnvNet3D(nn.Module):
         return [out1, out2, out3]
 
 if __name__ == "__main__":
-    model = EnvNet3D(hidden_width=8)
+    model = EnvNet3D(hidden_width=5)
     print(model)
-    x = torch.randn(2, 2, 8, 32, 32)  # B, C, D, H, W
+    x = torch.randn(1, 2, 64, 64, 64)  # B, C, D, H, W
     y = model(x)
     print([o.shape for o in y])
+
+    from thop import profile
+
+    input = torch.randn(1, 2, 64, 64, 64)
+    flops, params = profile(model, inputs=(input, ))
+    print(f"FLOPs: {flops / 1e9:.2f} G, Params: {params / 1e6:.2f} M")

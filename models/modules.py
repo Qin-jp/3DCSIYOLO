@@ -10,16 +10,19 @@ class Conv3dPad(nn.Module):
         assert padding_mode in ['zeros', 'circular']
         self.padding_mode = padding_mode
         if isinstance(kernel_size, int):
-            self.padding = [(kernel_size - 1) // 2] * 3
+            self.padding = [(kernel_size - 1) // 2, (kernel_size - 1) // 2, (kernel_size - 1) // 2] 
         else:
             self.padding = [(k - 1) // 2 for k in kernel_size]
         self.conv = nn.Conv3d(in_channels, out_channels, kernel_size, stride, padding=0, groups=groups, bias=bias)
 
     def forward(self, x):
-        # 3D padding: (W, H, D)
+        # 3D padding: (angel_1, angle_2, subcarrier)
+        # Only apply circular padding in angle domain
         if self.padding_mode == 'circular':
-            x = F.pad(x, (self.padding[2], self.padding[2], self.padding[1], self.padding[1],
+            x = F.pad(x, (0, 0, self.padding[1], self.padding[1],
                           self.padding[0], self.padding[0]), mode='circular')
+            x = F.pad(x, (self.padding[2], self.padding[2], 0, 0,
+                          0, 0), mode='constant', value=0)
         else:
             x = F.pad(x, (self.padding[2], self.padding[2], self.padding[1], self.padding[1],
                           self.padding[0], self.padding[0]), mode='constant', value=0)
@@ -32,9 +35,9 @@ class ConvBN3d(nn.Sequential):
         if not factorization:
             modules.append(("conv", Conv3dPad(in_channels, out_channels, kernel_size, stride, padding_mode, groups, bias)))
         else:
-            # 分解卷积：沿不同维度逐步卷积
-            modules.append(("conv_d", Conv3dPad(in_channels, out_channels, (kernel_size, 1, 1), 1, padding_mode, groups, bias)))
-            modules.append(("conv_hw", Conv3dPad(out_channels, out_channels, (1, kernel_size, kernel_size), stride, padding_mode, groups, bias)))
+            # conv factorization
+            modules.append(("conv_dh", Conv3dPad(in_channels, out_channels, (kernel_size, kernel_size, 1), 1, padding_mode, groups, bias)))
+            modules.append(("conv_w", Conv3dPad(out_channels, out_channels, (1, 1, kernel_size), stride, padding_mode, groups, bias)))
 
         modules.append(("bn", nn.BatchNorm3d(out_channels)))
         modules.append(("act", nn.SiLU()))
@@ -87,8 +90,8 @@ class HeadConv3d(nn.Sequential):
         if not factorization:
             layer.append(("conv", Conv3dPad(in_channels, out_channels, kernel_size, stride, padding_mode, groups, bias=False)))
         else:
-            layer.append(("conv1", Conv3dPad(in_channels, out_channels, (kernel_size, 1, 1), stride, padding_mode, groups, bias=False)))
-            layer.append(("conv2", Conv3dPad(out_channels, out_channels, (1, kernel_size, kernel_size), stride, padding_mode, groups, bias=False)))
+            layer.append(("conv1", Conv3dPad(in_channels, out_channels, (kernel_size, kernel_size, 1), stride, padding_mode, groups, bias=False)))
+            layer.append(("conv2", Conv3dPad(out_channels, out_channels, (1, 1, kernel_size), stride, padding_mode, groups, bias=False)))
         layer.append(("bn", nn.BatchNorm3d(out_channels)))
         layer.append(("act", nn.LeakyReLU(negative_slope=0.3, inplace=True)))
         super().__init__(OrderedDict(layer))
